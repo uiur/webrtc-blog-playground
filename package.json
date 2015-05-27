@@ -19,7 +19,6 @@
     "level-js": "^2.1.6",
     "levelup": "^1.1.0",
     "signalhub": "^4.0.3",
-    "simple-peer": "^5.9.0",
-    "webrtc-swarm": "^1.2.0"
+    "simple-peer": "^5.9.0"
   }
 }

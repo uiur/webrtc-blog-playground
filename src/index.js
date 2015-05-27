@@ -123,24 +123,23 @@ domready(function () {
     })
 
   var main = document.querySelector('main')
+  function update (el) {
+    main.innerHTML = ''
+    main.appendChild(el)
+  }
 
-  var bus = new Bacon.Bus()
-
-  db.createReadStream().on('data', bus.push.bind(bus))
-
-  db.on('put', function (key, value) {
-    bus.push({ key: key, value: value })
-  })
-
-  bus.scan([], function (a, b) {
+  Bacon.fromEvent(db.createReadStream(), 'data').merge(
+    Bacon.fromEvent(db, 'put', function (key, value) {
+      return { key: key, value: value }
+    })
+  ).scan([], function (a, b) {
     return a.concat([b])
   }).toProperty().changes().onValue(function (array) {
-    var ul = h('ul', array.map(function (data) {
-      return h('li', data.key + ': ' + data.value)
-    }))
-
-    main.innerHTML = ''
-    main.appendChild(ul)
+    update(
+      h('ul', array.map(function (data) {
+        return h('li', data.key + ': ' + data.value)
+      }))
+    )
   })
 })
 
