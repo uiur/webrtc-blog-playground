@@ -62,6 +62,22 @@ domready(function () {
     main.appendChild(el)
   }
 
+  function render (state) {
+    function renderEntry (entry) {
+      return h('article', [
+        h('h1', entry.id),
+        h('pre', entry.body)
+      ])
+    }
+
+    return h('div', [
+      state.entry ? renderEntry(state.entry) : null,
+      h('ul', state.entries.map(function (data) {
+        return h('li', data.key + ': ' + data.value)
+      }))
+    ])
+  }
+
   Bacon.fromEvent(db.createReadStream(), 'data').merge(
     Bacon.fromEvent(db, 'put', function (key, value) {
       return { key: key, value: value }
@@ -69,10 +85,18 @@ domready(function () {
   ).scan([], function (a, b) {
     return a.concat([b])
   }).toProperty().changes().onValue(function (array) {
-    update(
-      h('ul', array.map(function (data) {
-        return h('li', data.key + ': ' + data.value)
-      }))
-    )
+    var entryId = window.location.pathname.slice(1)
+
+    if (entryId.length > 0) {
+      db.get(entryId, function (err, value) {
+        if (err) return console.log(err)
+
+        var entry = { id: entryId, body: value }
+
+        update(render({ entry: entry, entries: array }))
+      })
+    } else {
+      update(render({ entries: array }))
+    }
   })
 })
