@@ -4,25 +4,30 @@ var db = require('./db.js')
 global.db = db
 
 var sha1 = require('./sha1.js')
-var Swarm = require('./swarm.js')
-var swarm = new Swarm()
-swarm.setup()
 
-swarm.on('data', function (message, peer) {
-  swarm.emit(message.type + '.' + message.method, message, peer)
+var webrtcSwarm = require('webrtc-swarm')
+var signalhub = require('signalhub')
+
+var hub = signalhub('swarm', ['http://localhost:8080'])
+var sw = webrtcSwarm(hub)
+
+var Swarm = require('./swarm.js')
+
+sw.on('peer', function (peer, id) {
+  Swarm.add(id, peer)
 })
 
-swarm.on('req.store', function (message) {
+Swarm.on('req.store', function (message) {
   if (message.key !== sha1(message.value)) return
 
   db.put(message.key, message.value)
 })
 
-swarm.on('req.findValue', function (message, peer) {
+Swarm.on('req.findValue', function (message, peer) {
   db.get(message.key, function (err, value) {
     if (err) return console.log(err)
 
-    peer.send({
+    peer.wire.send({
       type: 'res',
       method: 'findValue',
       key: message.key,
@@ -30,38 +35,6 @@ swarm.on('req.findValue', function (message, peer) {
     })
   })
 })
-
-// rpc
-function store (peerId, key, value) {
-  var peer = swarm.peers[peerId]
-  if (!peer) return
-
-  peer.send({ type: 'req', method: 'store', key: key, value: value })
-}
-
-function findValue (peerId, key) {
-  return new Promise(function (resolve, reject) {
-    var peer = swarm.peers[peerId]
-    if (!peer) reject()
-
-    peer.send({ type: 'req', method: 'findValue', key: key })
-
-    swarm.once('res.findValue', function (message) {
-      db.put(message.key, message.value, resolve)
-    })
-  })
-}
-
-function storeBroadcast (key, value) {
-  Object.keys(swarm.peers).forEach(function (peerId) {
-    store(peerId, key, value)
-  })
-}
-
-global.store = store
-global.findValue = findValue
-
-// wrapper
 
 // UI
 var domready = require('domready')
@@ -77,7 +50,7 @@ domready(function () {
 
       if (val.length > 0) {
         db.put(sha1(val), val)
-        storeBroadcast(sha1(val), val)
+        Swarm.storeBroadcast(sha1(val), val)
       }
 
       e.target.value = ''
@@ -118,13 +91,15 @@ domready(function () {
       db.get(entryId, function (err, value) {
         if (err) {
           setTimeout(function () {
-            var peerIds = Object.keys(swarm.peers)
-            Promise.race(peerIds.map(function (peerId) {
-              return findValue(peerId, entryId)
-            })).then(function (err, value) {
-              if (err) console.log(err)
+            Promise.race(Swarm.peers().map(function (peer) {
+              return peer.findValue(entryId)
+            })).then(function (value) {
+              db.put(entryId, value)
+
               var entry = { id: entryId, body: value }
               update(render({ entry: entry, entries: array }))
+            }).catch(function (err) {
+              console.error(err)
             })
           }, 1000)
 
