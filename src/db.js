@@ -1,2 +1,6 @@
 var levelup = require('levelup')
-module.exports = levelup('peer', { db: require('level-js') })
+
+module.exports = levelup('webrtc-blog', {
+  db: require('level-js'),
+  valueEncoding: 'json'
+})

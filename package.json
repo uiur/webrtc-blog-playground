@@ -19,6 +19,7 @@
     "keycode": "^2.1.0",
     "level-js": "^2.1.6",
     "levelup": "^1.1.0",
+    "moment": "^2.10.3",
     "signalhub": "^4.0.3",
     "simple-peer": "^5.9.0",
     "webrtc-swarm": "uiureo/webrtc-swarm@initial-broadcast",

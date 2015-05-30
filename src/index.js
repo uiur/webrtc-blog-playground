@@ -3,6 +3,8 @@ var Promise = require('es6-promise').Promise
 var db = require('./db.js')
 global.db = db
 
+var extend = require('xtend')
+
 var sha1 = require('./sha1.js')
 
 var webrtcSwarm = require('webrtc-swarm')
@@ -18,7 +20,7 @@ sw.on('peer', function (peer, id) {
 })
 
 Swarm.on('req.store', function (message) {
-  if (message.key !== sha1(message.value)) return
+  if (message.key !== sha1(JSON.stringify(message.value))) return
 
   db.put(message.key, message.value)
 })
@@ -36,12 +38,40 @@ Swarm.on('req.findValue', function (message, peer) {
   })
 })
 
+function findEntry (id) {
+  return new Promise(function (resolve, reject) {
+    db.get(id, function (err, value) {
+      if (err) {
+        setTimeout(function () {
+          Promise.race(Swarm.peers().map(function (peer) {
+            return peer.findValue(id)
+          })).then(function (value) {
+            db.put(id, value)
+
+            resolve(value)
+          }).catch(console.error.bind(console))
+        }, 1000)
+      } else {
+        resolve(value)
+      }
+    })
+  })
+}
+
+function publishEntry (value) {
+  var id = sha1(JSON.stringify(value))
+
+  db.put(id, value)
+  Swarm.storeBroadcast(id, value)
+}
+
 // UI
 var domready = require('domready')
 var textarea = require('./textarea.js')
 var Bacon = require('baconjs').Bacon
 global.Bacon = Bacon
 var h = require('hyperscript')
+var moment = require('moment')
 
 domready(function () {
   textarea(document.querySelector('textarea'))
@@ -49,8 +79,7 @@ domready(function () {
       var val = e.target.value
 
       if (val.length > 0) {
-        db.put(sha1(val), val)
-        Swarm.storeBroadcast(sha1(val), val)
+        publishEntry({ body: val, timestamp: Date.now() })
       }
 
       e.target.value = ''
@@ -66,6 +95,7 @@ domready(function () {
     function renderEntry (entry) {
       return h('article', [
         h('p', entry.id),
+        h('p.article-timestamp', moment(new Date(entry.timestamp)).fromNow()),
         h('p.article-body', entry.body)
       ])
     }
@@ -90,25 +120,8 @@ domready(function () {
     var entryId = window.location.pathname.slice(1)
 
     if (entryId.length > 0) {
-      db.get(entryId, function (err, value) {
-        if (err) {
-          setTimeout(function () {
-            Promise.race(Swarm.peers().map(function (peer) {
-              return peer.findValue(entryId)
-            })).then(function (value) {
-              db.put(entryId, value)
-
-              var entry = { id: entryId, body: value }
-              update(render({ entry: entry, entries: array }))
-            }).catch(function (err) {
-              console.error(err)
-            })
-          }, 1000)
-
-          return
-        }
-
-        var entry = { id: entryId, body: value }
+      findEntry(entryId).then(function (value) {
+        var entry = extend(value, { id: entryId })
         update(render({ entry: entry, entries: array }))
       })
     } else {
