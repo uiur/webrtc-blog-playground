@@ -5,10 +5,14 @@ var me = require('cuid')()
 
 var db = require('./db.js')
 var sha1 = require('./sha1.js')
+var inherits = require('util').inherits
+var EventEmitter = require('events').EventEmitter
 
 function Swarm () {
   this.peers = {}
 }
+
+inherits(Swarm, EventEmitter)
 
 Swarm.prototype.setup = function () {
   var self = this
@@ -47,23 +51,7 @@ Swarm.prototype.add = function (peerId, opts) {
   })
 
   peer.on('data', function (message) {
-    console.log('data:', message)
-
-    if (message.type === 'store') {
-      if (message.key !== sha1(message.value)) return
-
-      db.put(message.key, message.value)
-    } else if (message.type === 'findValue' && message.value === undefined) {
-      db.get(message.key, function (err, value) {
-        if (err) return console.log(err)
-
-        peer.send({
-          type: 'findValue',
-          key: message.key,
-          value: value
-        })
-      })
-    }
+    self.emit('data', message, peer)
   })
 
   peer.on('close', function () {

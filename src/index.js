@@ -1,3 +1,5 @@
+var Promise = require('es6-promise').Promise
+
 var db = require('./db.js')
 global.db = db
 
@@ -6,18 +8,48 @@ var Swarm = require('./swarm.js')
 var swarm = new Swarm()
 swarm.setup()
 
+swarm.on('data', function (message, peer) {
+  swarm.emit(message.type + '.' + message.method, message, peer)
+})
+
+swarm.on('req.store', function (message) {
+  if (message.key !== sha1(message.value)) return
+
+  db.put(message.key, message.value)
+})
+
+swarm.on('req.findValue', function (message, peer) {
+  db.get(message.key, function (err, value) {
+    if (err) return console.log(err)
+
+    peer.send({
+      type: 'res',
+      method: 'findValue',
+      key: message.key,
+      value: value
+    })
+  })
+})
+
+// rpc
 function store (peerId, key, value) {
   var peer = swarm.peers[peerId]
   if (!peer) return
 
-  peer.send({ type: 'store', key: key, value: value })
+  peer.send({ type: 'req', method: 'store', key: key, value: value })
 }
 
 function findValue (peerId, key) {
-  var peer = swarm.peers[peerId]
-  if (!peer) return
+  return new Promise(function (resolve, reject) {
+    var peer = swarm.peers[peerId]
+    if (!peer) reject()
 
-  peer.send({ type: 'findValue', key: key })
+    peer.send({ type: 'req', method: 'findValue', key: key })
+
+    swarm.once('res.findValue', function (message) {
+      db.put(message.key, message.value, resolve)
+    })
+  })
 }
 
 function storeBroadcast (key, value) {
@@ -26,15 +58,10 @@ function storeBroadcast (key, value) {
   })
 }
 
-function broadcast (text) {
-  Object.keys(swarm.peers).forEach(function (peerId) {
-    swarm.peers[peerId].send(text)
-  })
-}
-
 global.store = store
-global.broadcast = broadcast
 global.findValue = findValue
+
+// wrapper
 
 // UI
 var domready = require('domready')
@@ -89,10 +116,22 @@ domready(function () {
 
     if (entryId.length > 0) {
       db.get(entryId, function (err, value) {
-        if (err) return console.log(err)
+        if (err) {
+          setTimeout(function () {
+            var peerIds = Object.keys(swarm.peers)
+            Promise.race(peerIds.map(function (peerId) {
+              return findValue(peerId, entryId)
+            })).then(function (err, value) {
+              if (err) console.log(err)
+              var entry = { id: entryId, body: value }
+              update(render({ entry: entry, entries: array }))
+            })
+          }, 1000)
+
+          return
+        }
 
         var entry = { id: entryId, body: value }
-
         update(render({ entry: entry, entries: array }))
       })
     } else {
