@@ -1,0 +1,6 @@
+{
+  "name": "webrtc-blog-playground",
+  "dependencies": {
+    "skeleton": "~2.0.4"
+  }
+}
