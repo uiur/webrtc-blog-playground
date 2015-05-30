@@ -65,8 +65,8 @@ domready(function () {
   function render (state) {
     function renderEntry (entry) {
       return h('article', [
-        h('h1', entry.id),
-        h('pre', entry.body)
+        h('p', entry.id),
+        h('p.article-body', entry.body)
       ])
     }
 

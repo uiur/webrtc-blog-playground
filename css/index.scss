@@ -1,2 +1,10 @@
 @import 'bower_components/skeleton/css/normalize';
 @import 'bower_components/skeleton/css/skeleton';
+
+* {
+  box-sizing: border-box;
+}
+
+.article-body {
+  white-space: pre-wrap;
+}
