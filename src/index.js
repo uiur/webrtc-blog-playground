@@ -73,7 +73,9 @@ domready(function () {
     return h('div', [
       state.entry ? renderEntry(state.entry) : null,
       h('ul', state.entries.map(function (data) {
-        return h('li', data.key + ': ' + data.value)
+        return h('li', [
+          h('a', { href: '/' + data.key }, data.key)
+        ])
       }))
     ])
   }
