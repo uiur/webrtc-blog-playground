@@ -67,16 +67,25 @@ function publishEntry (value) {
 
 // UI
 var domready = require('domready')
-var textarea = require('./textarea.js')
 var Bacon = require('baconjs').Bacon
 global.Bacon = Bacon
 
-var mainLoop = require("main-loop")
-var h = require("virtual-dom/h")
+var mainLoop = require('main-loop')
+var h = require('virtual-dom/h')
 
 var moment = require('moment')
 
 function render (state) {
+  return h('div', [
+    state.entry ? renderEntry(state.entry) : null,
+    h('ul', state.entries.map(function (data) {
+      return h('li', [
+        h('a', { href: '/' + data.key }, data.key)
+      ])
+    })),
+    renderForm()
+  ])
+
   function renderEntry (entry) {
     return h('article', [
       h('p.article-body', entry.body),
@@ -84,14 +93,16 @@ function render (state) {
     ])
   }
 
-  return h('div', [
-    state.entry ? renderEntry(state.entry) : null,
-    h('ul', state.entries.map(function (data) {
-      return h('li', [
-        h('a', { href: '/' + data.key }, data.key)
-      ])
-    }))
-  ])
+  function renderForm () {
+    return h('form.post-form', [
+      h('input.title', { type: 'text' }),
+      h('textarea.body'),
+      h('input.button.button-primary.u-full-width', {
+        type: 'submit',
+        value: ' '
+      })
+    ])
+  }
 }
 
 var initState = { entries: [] }
