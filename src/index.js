@@ -70,62 +70,68 @@ var domready = require('domready')
 var textarea = require('./textarea.js')
 var Bacon = require('baconjs').Bacon
 global.Bacon = Bacon
-var h = require('hyperscript')
+
+var mainLoop = require("main-loop")
+var h = require("virtual-dom/h")
+
 var moment = require('moment')
 
-domready(function () {
-  textarea(document.querySelector('textarea'))
-    .on('enter', function (e) {
-      var val = e.target.value
-
-      if (val.length > 0) {
-        publishEntry({ body: val, timestamp: Date.now() })
-      }
-
-      e.target.value = ''
-    })
-
-  var main = document.querySelector('main')
-  function update (el) {
-    main.innerHTML = ''
-    main.appendChild(el)
-  }
-
-  function render (state) {
-    function renderEntry (entry) {
-      return h('article', [
-        h('p', entry.id),
-        h('p.article-timestamp', moment(new Date(entry.timestamp)).fromNow()),
-        h('p.article-body', entry.body)
-      ])
-    }
-
-    return h('div', [
-      state.entry ? renderEntry(state.entry) : null,
-      h('ul', state.entries.map(function (data) {
-        return h('li', [
-          h('a', { href: '/' + data.key }, data.key)
-        ])
-      }))
+function render (state) {
+  function renderEntry (entry) {
+    return h('article', [
+      h('p.article-body', entry.body),
+      h('p.article-timestamp', moment(new Date(entry.timestamp)).fromNow())
     ])
   }
 
-  Bacon.fromEvent(db.createReadStream(), 'data').merge(
-    Bacon.fromEvent(db, 'put', function (key, value) {
-      return { key: key, value: value }
-    })
-  ).scan([], function (a, b) {
-    return a.concat([b])
-  }).toProperty().changes().onValue(function (array) {
-    var entryId = window.location.pathname.slice(1)
+  return h('div', [
+    state.entry ? renderEntry(state.entry) : null,
+    h('ul', state.entries.map(function (data) {
+      return h('li', [
+        h('a', { href: '/' + data.key }, data.key)
+      ])
+    }))
+  ])
+}
 
-    if (entryId.length > 0) {
-      findEntry(entryId).then(function (value) {
-        var entry = extend(value, { id: entryId })
-        update(render({ entry: entry, entries: array }))
-      })
-    } else {
-      update(render({ entries: array }))
-    }
+var initState = { entries: [] }
+
+var loop = mainLoop(initState, render, {
+  create: require('virtual-dom/create-element'),
+  diff: require('virtual-dom/diff'),
+  patch: require('virtual-dom/patch')
+})
+
+domready(function () {
+  document.querySelector('main').appendChild(loop.target)
+})
+
+// textarea(document.querySelector('textarea'))
+//   .on('enter', function (e) {
+//     var val = e.target.value
+//
+//     if (val.length > 0) {
+//       publishEntry({ body: val, timestamp: Date.now() })
+//     }
+//
+//     e.target.value = ''
+//   })
+
+Bacon.fromEvent(db.createReadStream(), 'data').merge(
+  Bacon.fromEvent(db, 'put', function (key, value) {
+    return { key: key, value: value }
   })
+).scan([], function (a, b) {
+  return a.concat([b])
+}).toProperty().changes().onValue(function (array) {
+  var entryId = window.location.pathname.slice(1)
+
+  if (entryId.length > 0) {
+    findEntry(entryId).then(function (value) {
+      var entry = extend(value, { id: entryId })
+      loop.update({ entry: entry, entries: array })
+    })
+  } else {
+    loop.update({ entries: array })
+  }
 })
