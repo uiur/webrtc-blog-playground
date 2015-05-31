@@ -87,7 +87,7 @@ function render (state) {
         h('a', { href: '/' + data.key }, data.key)
       ])
     })),
-    renderForm()
+    renderForm(state.form)
   ])
 
   function renderEntry (entry) {
@@ -97,7 +97,7 @@ function render (state) {
     ])
   }
 
-  function renderForm () {
+  function renderForm (form) {
     return h('form.post-form', {
       'ev-submit': function (e) {
         e.preventDefault()
@@ -117,13 +117,14 @@ function render (state) {
       }),
       h('input.button.button-primary.u-full-width', {
         type: 'submit',
-        value: ' '
+        value: ' ',
+        disabled: !form.submitEnabled
       })
     ])
   }
 }
 
-var currentState = { entries: [] }
+var currentState = { entries: [], form: { submitEnabled: false } }
 
 var loop = mainLoop(currentState, render, {
   create: require('virtual-dom/create-element'),
@@ -141,16 +142,12 @@ var bodyBus = new Bacon.Bus()
 
 submitBus.map(true).log()
 var body = bodyBus.map('.target.value').toProperty('')
-// var submitEnabled = body.map(function (value) { return value.length > 0 }).toProperty(false).changes()
-//
-// submitEnabled.onValue(function (val) {
-//
-// })
+var submitEnabled = body.map(function (value) { return value.length > 0 })
 
 var newEntry = Bacon.combineTemplate({
   title: titleBus.map('.target.value').toProperty(''),
   body: body
-}).log()
+})
 
 // textarea(document.querySelector('textarea'))
 //   .on('enter', function (e) {
@@ -181,7 +178,11 @@ var entry = entryId.flatMap(function (entryId) {
 
 Bacon.combineTemplate({
   entry: entry,
-  entries: entries
+  entries: entries,
+  form: {
+    submitEnabled: submitEnabled
+  }
 }).changes().onValue(function (state) {
+  console.log('state', state)
   loop.update(state)
 })
