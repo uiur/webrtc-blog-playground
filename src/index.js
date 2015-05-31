@@ -73,11 +73,14 @@ global.Bacon = Bacon
 var mainLoop = require('main-loop')
 var h = require('virtual-dom/h')
 
-var moment = require('moment')
+require('dom-delegator')()
 
+var renderEntry = require('./components/entry.js')
+var postForm = require('./components/postForm.js')
 
-var Delegator = require('dom-delegator')
-Delegator()
+postForm.channel.submit.onValue(function (entry) {
+  publishEntry(entry)
+})
 
 function render (state) {
   return h('div', [
@@ -87,41 +90,8 @@ function render (state) {
         h('a', { href: '/' + data.key }, data.key)
       ])
     })),
-    renderForm(state.form)
+    postForm(state.form)
   ])
-
-  function renderEntry (entry) {
-    return h('article', [
-      h('p.article-body', entry.body),
-      h('p.article-timestamp', moment(new Date(entry.timestamp)).fromNow())
-    ])
-  }
-
-  function renderForm (form) {
-    return h('form.post-form', {
-      'ev-submit': function (e) {
-        e.preventDefault()
-        submitBus.push(e)
-      }
-    }, [
-      h('input.title', {
-        type: 'text',
-        'ev-input': function (e) {
-          titleBus.push(e)
-        }
-      }),
-      h('textarea.body', {
-        'ev-input': function (e) {
-          bodyBus.push(e)
-        }
-      }),
-      h('input.button.button-primary.u-full-width', {
-        type: 'submit',
-        value: ' ',
-        disabled: !form.submitEnabled
-      })
-    ])
-  }
 }
 
 var currentState = { entries: [], form: { submitEnabled: false } }
@@ -135,30 +105,6 @@ var loop = mainLoop(currentState, render, {
 domready(function () {
   document.querySelector('main').appendChild(loop.target)
 })
-
-var submitBus = new Bacon.Bus()
-var titleBus = new Bacon.Bus()
-var bodyBus = new Bacon.Bus()
-
-submitBus.map(true).log()
-var body = bodyBus.map('.target.value').toProperty('')
-var submitEnabled = body.map(function (value) { return value.length > 0 })
-
-var newEntry = Bacon.combineTemplate({
-  title: titleBus.map('.target.value').toProperty(''),
-  body: body
-})
-
-// textarea(document.querySelector('textarea'))
-//   .on('enter', function (e) {
-//     var val = e.target.value
-//
-//     if (val.length > 0) {
-//       publishEntry({ body: val, timestamp: Date.now() })
-//     }
-//
-//     e.target.value = ''
-//   })
 
 var entries = Bacon.fromEvent(db.createReadStream(), 'data').merge(
   Bacon.fromEvent(db, 'put', function (key, value) {
@@ -179,9 +125,7 @@ var entry = entryId.flatMap(function (entryId) {
 Bacon.combineTemplate({
   entry: entry,
   entries: entries,
-  form: {
-    submitEnabled: submitEnabled
-  }
+  form: postForm.channel.state
 }).changes().onValue(function (state) {
   console.log('state', state)
   loop.update(state)
