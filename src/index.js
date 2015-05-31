@@ -48,11 +48,11 @@ function findEntry (id) {
           })).then(function (value) {
             db.put(id, value)
 
-            resolve(value)
+            resolve(extend(value, { id: id }))
           }).catch(console.error.bind(console))
         }, 1000)
       } else {
-        resolve(value)
+        resolve(extend(value, { id: id }))
       }
     })
   })
@@ -75,6 +75,10 @@ var h = require('virtual-dom/h')
 
 var moment = require('moment')
 
+
+var Delegator = require('dom-delegator')
+Delegator()
+
 function render (state) {
   return h('div', [
     state.entry ? renderEntry(state.entry) : null,
@@ -94,9 +98,23 @@ function render (state) {
   }
 
   function renderForm () {
-    return h('form.post-form', [
-      h('input.title', { type: 'text' }),
-      h('textarea.body'),
+    return h('form.post-form', {
+      'ev-submit': function (e) {
+        e.preventDefault()
+        submitBus.push(e)
+      }
+    }, [
+      h('input.title', {
+        type: 'text',
+        'ev-input': function (e) {
+          titleBus.push(e)
+        }
+      }),
+      h('textarea.body', {
+        'ev-input': function (e) {
+          bodyBus.push(e)
+        }
+      }),
       h('input.button.button-primary.u-full-width', {
         type: 'submit',
         value: ' '
@@ -105,9 +123,9 @@ function render (state) {
   }
 }
 
-var initState = { entries: [] }
+var currentState = { entries: [] }
 
-var loop = mainLoop(initState, render, {
+var loop = mainLoop(currentState, render, {
   create: require('virtual-dom/create-element'),
   diff: require('virtual-dom/diff'),
   patch: require('virtual-dom/patch')
@@ -116,6 +134,23 @@ var loop = mainLoop(initState, render, {
 domready(function () {
   document.querySelector('main').appendChild(loop.target)
 })
+
+var submitBus = new Bacon.Bus()
+var titleBus = new Bacon.Bus()
+var bodyBus = new Bacon.Bus()
+
+submitBus.map(true).log()
+var body = bodyBus.map('.target.value').toProperty('')
+// var submitEnabled = body.map(function (value) { return value.length > 0 }).toProperty(false).changes()
+//
+// submitEnabled.onValue(function (val) {
+//
+// })
+
+var newEntry = Bacon.combineTemplate({
+  title: titleBus.map('.target.value').toProperty(''),
+  body: body
+}).log()
 
 // textarea(document.querySelector('textarea'))
 //   .on('enter', function (e) {
@@ -128,21 +163,25 @@ domready(function () {
 //     e.target.value = ''
 //   })
 
-Bacon.fromEvent(db.createReadStream(), 'data').merge(
+var entries = Bacon.fromEvent(db.createReadStream(), 'data').merge(
   Bacon.fromEvent(db, 'put', function (key, value) {
     return { key: key, value: value }
   })
 ).scan([], function (a, b) {
   return a.concat([b])
-}).toProperty().changes().onValue(function (array) {
-  var entryId = window.location.pathname.slice(1)
+}).toProperty().changes()
 
-  if (entryId.length > 0) {
-    findEntry(entryId).then(function (value) {
-      var entry = extend(value, { id: entryId })
-      loop.update({ entry: entry, entries: array })
-    })
-  } else {
-    loop.update({ entries: array })
-  }
+var entryId = Bacon.constant(window.location.pathname.slice(1)).filter(function (id) {
+  return id.length > 0
+})
+
+var entry = entryId.flatMap(function (entryId) {
+  return Bacon.fromPromise(findEntry(entryId))
+}).toProperty(null)
+
+Bacon.combineTemplate({
+  entry: entry,
+  entries: entries
+}).changes().onValue(function (state) {
+  loop.update(state)
 })

@@ -17,6 +17,10 @@ main {
   white-space: pre-wrap;
 }
 
+input[disabled] {
+  opacity: 0.4;
+}
+
 .post-form {
   > .title {
     width: 100%;

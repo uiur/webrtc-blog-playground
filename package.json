@@ -13,6 +13,7 @@
     "baconjs": "^0.7.60",
     "cuid": "^1.2.5",
     "debug": "^2.2.0",
+    "dom-delegator": "^13.1.0",
     "domready": "^1.0.8",
     "es6-promise": "^2.1.1",
     "hyperscript": "^1.4.6",
